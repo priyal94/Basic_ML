@@ -1,0 +1,281 @@
+---
+title: "Loss_Functions"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r library}
+library(tidyverse)
+library(ggplot2)
+library(matlib)
+```
+
+```{r Loss Functions}
+
+compute_L2_Loss <-  function(trueVal,predVal){
+  diff <- y_pred-y_true
+  return(diff * diff) 
+}
+
+compute_MAE <-  function(trueVal,predVal){
+  diff <- y_pred-y_true
+  return(abs(diff)) 
+}
+
+compute_HuberLoss <- function(trueVal,predVal,delta){
+  diff <- y_pred-y_true
+  loss <- c()
+  for(x in diff){
+    if(abs(x)<=delta){
+      loss <- c(loss,x^2/2)
+    }else if(abs(x) > delta){
+      loss <- c(loss,delta*abs(x) - delta^2/2)
+    }
+  }
+  calculateHuberLoss <- loss
+}
+
+plot_Losses <- function(df){
+ 
+   plot <- ggplot() + geom_line(data= df, aes(x=y_pred, y = L2_loss, color="L2_Loss")) +
+  geom_line(data= df, aes(x=y_pred, y=MAE, color="L1_Loss")) + 
+  geom_line(data= df, aes(x=y_pred, y=Huber_loss_delta1, color="Huber_Loss_delta_2")) + 
+  geom_line(data= df, aes(x=y_pred, y=Huber_loss_delta2, color="Huber_Loss_delta_1")) + 
+  scale_fill_manual(name = "Legend", 
+                    values = c(L2_Loss="red", L1_Loss="blue",
+                              Huber_Loss_delta_2="green", Huber_Loss_delta_1="black")) +
+  xlab("Loss function values") + ylab("Predicted values") + 
+  ggtitle("Overlay graph of Loss Functions")
+
+  print(plot)
+}
+
+set.seed(123)
+y_true <- 0
+y_pred <-  sample(seq(from = -3.0, to = 3.0,by=0.01), size = 50, replace= TRUE)
+
+
+L2_loss <- compute_L2_Loss(y_true,y_pred)
+
+MAE <- compute_MAE(y_true,y_pred)
+
+Huber_loss_delta1 <- compute_HuberLoss(y_true,y_pred,2.5)
+Huber_loss_delta2 <- compute_HuberLoss(y_true,y_pred,1)
+
+df <- data.frame(y_pred, L2_loss,MAE,Huber_loss_delta1,Huber_loss_delta2)
+
+# Plot for Loss functions
+plot_Losses(df)
+
+```
+
+
+```{r compute paramters}
+
+compute_theta_0 <- function(h_theta,y,alpha,m,lossfunc){
+  switch(lossfunc,
+         "Quad" = (alpha/m) * 2 * (h_theta-y),
+         "MAE"= (alpha/m) * (h_theta-y)/abs(h_theta-y),
+         "SquaredError" = (alpha/m) * (h_theta-y),
+         "HuberLoss" = compute_huber_theta_0(h_theta,0,y,alpha,m,lossfunc),
+  )
+}
+
+compute_theta_1 <- function(h_theta,x,y,alpha,m,lossfunc){
+  switch(lossfunc,
+         "Quad" = (alpha/m) * 2 * ((h_theta-y)*x),
+         "MAE"= (alpha/m) * ((h_theta-y)*x)/abs(h_theta-y),
+         "SquaredError" = (alpha/m) * (h_theta-y)*x,
+         "HuberLoss" = compute_huber_theta_1(h_theta,x,y,alpha,m,lossfunc),
+  )
+}
+
+compute_huber_theta_0 <- function(h_theta,x,y,alpha,m,lossfunc){
+  delta <- 1.1
+  diff <- h_theta - y
+  theta_huber <- 0 
+  if (sum(abs(diff))/m <= delta){ 
+      theta_huber <- (alpha/m) * diff
+    }
+    else{
+      theta_huber <- (alpha/m) *  delta * diff/abs(diff)
+    }
+  compute_huber_theta_0 <- theta_huber
+}
+
+compute_huber_theta_1 <- function(h_theta,x,y,alpha,m,lossfunc){
+  delta <- 1.1
+  diff <- h_theta - y
+  theta_huber <- 0
+    if (sum(abs(diff))/m <= delta){ 
+      theta_huber <- (alpha/m) * diff * x 
+    }
+    else{
+      theta_huber <- (alpha/m) *  delta * diff * x/abs(diff)
+    }
+  compute_huber_theta_1 <- theta_huber
+}
+
+```
+
+```{r Batch Gradient Descent}
+
+computeGradientDecent <- function(x,y,theta,alpha,iter,lossfunc){
+  m <- length(y)
+  h_theta <- theta[1] + theta[2] * x
+  while (iter!=0) {
+    temp1 <- theta[1] - sum(compute_theta_0(h_theta,y,alpha,m,lossfunc))
+    temp2 <- theta[2] - sum(compute_theta_1(h_theta,x,y,alpha,m,lossfunc))
+    theta[1] <- temp1
+    theta[2] <- temp2
+    h_theta <- theta[1] + theta[2] * x
+    iter <- iter - 1
+  }
+  computeGradientDecent <- theta
+}
+
+```
+
+```{r Stochastic gradient descent}
+
+stochasticGradientDecent <- function(x,y,theta,alpha,iter,lossfunc){
+  m <- length(y)
+  df <- data.frame(x,y)
+  h_theta <- theta[1] + theta[2] * x
+  rows <- sample(nrow(df))
+  df <- df[rows, ]
+  i <- 1
+  while (iter!=0) {
+    for(i in 1:m){
+      h_theta[i] <- theta[1] + theta[2] * df$x[i]
+      temp1 <- theta[1] - compute_theta_0(h_theta[i],df$y[i],alpha,1,lossfunc)
+      temp2 <- theta[2] - compute_theta_1(h_theta[i],df$x[i],df$y[i],alpha,1,lossfunc)
+      theta[1] <- temp1
+      theta[2] <- temp2
+    }
+    iter <- iter - 1
+  }
+  stochasticGradientDecent <- theta
+}
+```
+
+```{r Analytical Gradient Descent}
+
+computeAnalyticalGradientDescent <- function(x,y){
+  A <- matrix(x)
+  A <- cbind(c(1), A)
+  theta <- inv(t(A) %*% A) %*% t(A) %*% y
+}
+
+```
+
+```{r Data Initialization}
+getX <- function(){
+  return(runif(50, min = -2, max = 2)) 
+}
+
+getY <- function(){
+  e <- rnorm(50,0,4)
+  y <- 3 + 2*x + e
+  return(y)
+}
+```
+
+# Gradient Descent for Squared Error
+```{r Squared Error}
+x <- getX()
+y<- getY()
+
+theta_analytical <- computeAnalyticalGradientDescent(x,y)
+theta_batch <- computeGradientDecent(x,y,c(0,0),0.01,1000,"SquaredError")
+theta_stochastic <- stochasticGradientDecent(x,y,c(0,0),0.01,1000,"SquaredError")
+
+print(paste("Analytical Solution for Squared Error: ", theta_analytical))
+print(paste("Batch Gradient Descent for Squared Error: ", theta_batch))
+print(paste("Stochastic Gradient Descent for Squared Error: ", theta_stochastic))
+```
+
+# Gradient Descent for MAE
+```{r MAE}
+theta_analytical <- computeAnalyticalGradientDescent(x,y)
+theta_batch <- computeGradientDecent(x,y,c(0,0),0.01,1000,"MAE")
+theta_stochastic <- stochasticGradientDecent(x,y,c(0,0),0.01,1000,"MAE")
+
+print(paste("Analytical Solution ", theta_analytical))
+print(paste("Batch Gradient Descent for Mean Absolute Error: ", theta_batch))
+print(paste("Stochastic Gradient Descent for Mean Absolute Error: ", theta_stochastic))
+```
+
+# Gradient Descent for Huber Loss
+```{r Huber Loss}
+theta_analytical <- computeAnalyticalGradientDescent(x,y)
+theta_batch <- computeGradientDecent(x,y,c(0,0),0.01,1000,"HuberLoss")
+theta_stochastic <- stochasticGradientDecent(x,y,c(0,0),0.01,1000,"HuberLoss")
+
+print(paste("Analytical Solution ", theta_analytical))
+print(paste("Batch Gradient Descent for Huber Loss: ", theta_batch))
+print(paste("Stochastic Gradient Descent for Huber Loss: ", theta_stochastic))
+```
+
+# Gradient Descent Comparision
+```{r Gradient Descent Comparision}
+set.seed(124)
+getSlopes <- function(lossfunc,iterations){
+  slopeBatch <- c()
+  slopeAnalytical <- c()
+  slopeStochastic <- c()
+    for(epoch in 1:iterations){
+      x <- getX()
+      y <- getY()
+      slopeBatch <- c(slopeBatch,computeGradientDecent(x,y,c(0,0),0.01,1000,lossfunc)[2])
+      slopeStochastic <- c(slopeStochastic,stochasticGradientDecent(x,y,c(0,0),0.01,1000,lossfunc)[2])
+      slopeAnalytical <- c(slopeAnalytical,as.vector(computeAnalyticalGradientDescent(x,y))[2])
+    }
+    
+    slope <- data.frame(batch = slopeBatch, analytic = slopeAnalytical, 
+                        stochastic = slopeStochastic)
+    return(slope)
+}
+```
+
+# Comparision of Gradient Descent for Squared Error 
+```{r Squared Error Comparision}
+slopes <- getSlopes("SquaredError",1000)
+
+par(mfrow=c(1,3))
+hist(slopes$batch, xlab="Slope", main="Batch Gradient Descent",breaks=15)
+abline(v=2,col="red")
+hist(slopes$analytic, xlab="Slope", main="Analytical Gradient Descent",breaks=15)
+abline(v=2,col="red")
+hist(slopes$stochastic, xlab="Slope", main="Stochastic Gradient Descent",breaks=15)
+abline(v=2,col="red")
+```
+
+# Comparision of Gradient Descent for MAE Error 
+```{r MAE Comparision}
+slopes <- getSlopes("MAE",1000)
+
+par(mfrow=c(1,3))
+hist(slopes$batch, xlab="Slope", main="Batch Gradient Descent",breaks=15)
+abline(v=2,col="red")
+hist(slopes$analytic, xlab="Slope", main="Analytical Gradient Descent",breaks=15)
+abline(v=2,col="red")
+hist(slopes$stochastic, xlab="Slope", main="Stochastic Gradient Descent",breaks=15)
+abline(v=2,col="red")
+```
+
+# Comparision of Gradient Descent for Huber Loss 
+```{r Huber Loss Comparision}
+slopes <- getSlopes("HuberLoss",1000)
+
+par(mfrow=c(1,3))
+hist(slopes$batch, xlab="Slope", main="Batch Gradient Descent",breaks=10)
+abline(v=2,col="red")
+hist(slopes$analytic, xlab="Slope", main="Analytical Gradient Descent",breaks=10)
+abline(v=2,col="red")
+hist(slopes$stochastic, xlab="Slope", main="Stochastic Gradient Descent",breaks=10)
+abline(v=2,col="red")
+```
